@@ -1,37 +1,35 @@
-
-from flask import Flask   # Add this
+from flask import Flask
 import threading
 import discord
 import os
 from dotenv import load_dotenv
 from groq import Groq
 
-# === Keep-alive web server ===
+# ================== Keep-Alive for Render ==================
 app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Discord Bot is Running! ✅"
+    return "✅ AakiGPT Discord Bot is Running!"
 
 def run_flask():
-    app.run(host='0.0.0.0', port=10000)
+    app.run(host='0.0.0.0', port=10000, debug=False)
 
-# Start the web server in background
+# Start Flask server in background
 threading.Thread(target=run_flask, daemon=True).start()
-
+# ===========================================================
 
 load_dotenv()
-
 
 # Using your exact .env variable names
 DISCORD_TOKEN = os.getenv("TOKEN")
 GROQ_API_KEY = os.getenv("API")
 
-# Safety check
+# Safety checks
 if not DISCORD_TOKEN:
-    raise ValueError("TOKEN not found in .env file!")
+    raise ValueError("TOKEN not found in environment variables!")
 if not GROQ_API_KEY:
-    raise ValueError("API not found in .env file!")
+    raise ValueError("API not found in environment variables!")
 
 groq_client = Groq(api_key=GROQ_API_KEY)
 
@@ -43,9 +41,7 @@ class MyClient(discord.Client):
         if message.author == self.user:
             return
 
-        # Reply only when the bot is mentioned
         if self.user.mentioned_in(message):
-            # Clean the user message (remove mention)
             user_input = message.content.replace(f"<@{self.user.id}>", "").replace(f"<@!{self.user.id}>", "").strip()
 
             if not user_input:
@@ -55,7 +51,6 @@ class MyClient(discord.Client):
             try:
                 thinking_msg = await message.channel.send("Thinking... 🤔")
 
-                # Groq streaming
                 stream = groq_client.chat.completions.create(
                     model="llama-3.3-70b-versatile",
                     messages=[{"role": "user", "content": user_input}],
@@ -79,10 +74,10 @@ class MyClient(discord.Client):
 
             except Exception as e:
                 print(f"Error: {e}")
-                await message.channel.send("Sorry, I'm having some trouble right now 😓 Please try again.")
+                await message.channel.send("Sorry, I'm having some trouble right now 😓")
 
 intents = discord.Intents.default()
 intents.message_content = True
 
 bot = MyClient(intents=intents)
-bot.run(DISCORD_TOKEN) 
+bot.run(DISCORD_TOKEN)
