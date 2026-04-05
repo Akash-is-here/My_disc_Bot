@@ -1,10 +1,10 @@
 
+from flask import Flask   # Add this
+import threading
 import discord
 import os
 from dotenv import load_dotenv
 from groq import Groq
-from flask import Flask   # Add this
-import threading
 
 # === Keep-alive web server ===
 app = Flask(__name__)
