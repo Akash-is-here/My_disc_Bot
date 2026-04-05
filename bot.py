@@ -3,8 +3,25 @@ import discord
 import os
 from dotenv import load_dotenv
 from groq import Groq
+from flask import Flask   # Add this
+import threading
+
+# === Keep-alive web server ===
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Discord Bot is Running! ✅"
+
+def run_flask():
+    app.run(host='0.0.0.0', port=10000)
+
+# Start the web server in background
+threading.Thread(target=run_flask, daemon=True).start()
+
 
 load_dotenv()
+
 
 # Using your exact .env variable names
 DISCORD_TOKEN = os.getenv("TOKEN")
