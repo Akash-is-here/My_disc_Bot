@@ -1,0 +1,23 @@
+# Sensitive files - Never upload these!
+.env
+.env.local
+.env.*
+
+# Keep .env.example so others know what keys are needed
+!.env.example
+
+# Python stuff
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+venv/
+env/
+.venv/
+
+# Logs and temp files
+*.log
+
+# IDE folders
+.vscode/
+.idea/
