@@ -3,7 +3,6 @@ import os
 from dotenv import load_dotenv
 from groq import Groq
 import asyncio
-import aiohttp
 from aiohttp import web
 
 # ================== KEEP-ALIVE SERVER (aiohttp) ==================
@@ -20,7 +19,7 @@ async def start_keep_alive():
     await runner.setup()
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
-    print(f"🔥 Keep-alive server started successfully on port {port}")
+    print(f"🔥 Keep-alive server started on port {port}")
 # =================================================================
 
 load_dotenv()
@@ -28,9 +27,9 @@ DISCORD_TOKEN = os.getenv("TOKEN")
 GROQ_API_KEY = os.getenv("API")
 
 if not DISCORD_TOKEN:
-    raise ValueError("❌ TOKEN not found in environment variables!")
+    raise ValueError("❌ TOKEN not found!")
 if not GROQ_API_KEY:
-    raise ValueError("❌ API not found in environment variables!")
+    raise ValueError("❌ API not found!")
 
 groq_client = Groq(api_key=GROQ_API_KEY)
 
@@ -45,7 +44,7 @@ SYSTEM_PROMPT = (
 class MyClient(discord.Client):
     async def on_ready(self):
         print(f'✅ Logged in as {self.user}')
-        print('🤖 AakiGPT is now online and running 24/7')
+        print('🤖 AakiGPT is now online and running 24/7 on Render')
 
     async def on_message(self, message):
         if message.author == self.user:
@@ -101,14 +100,16 @@ intents = discord.Intents.default()
 intents.message_content = True
 client = MyClient(intents=intents)
 
+# ====================== MAIN FUNCTION ======================
 async def main():
-    try:
-        await start_keep_alive()   # Start web server first
-        print("Starting Discord bot...")
-        await client.start(DISCORD_TOKEN)   # This keeps running forever
-    except Exception as e:
-        print(f"Critical error in main: {e}")
-        raise
+    await start_keep_alive()          # Start web server
+    print("Starting Discord bot...")
+    await client.start(DISCORD_TOKEN) # This runs forever
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("Bot stopped manually.")
+    except Exception as e:
+        print(f"Critical error: {e}")
