@@ -6,22 +6,22 @@ import asyncio
 import aiohttp
 from aiohttp import web
 
-# ================== KEEP-ALIVE FOR RENDER (aiohttp - Recommended) ==================
+# ================== KEEP-ALIVE SERVER (aiohttp) ==================
 async def ping_handler(request):
     return web.Response(text="✅ AakiGPT Bot is Running 24/7 on Render", status=200)
 
 async def start_keep_alive():
     app = web.Application()
-    app.router.add_get('/', ping_handler)      # Root path
-    app.router.add_get('/ping', ping_handler)  # Extra path for safety
+    app.router.add_get('/', ping_handler)
+    app.router.add_get('/ping', ping_handler)
 
     port = int(os.getenv("PORT", 10000))
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
-    print(f"🔥 Keep-alive server started on port {port} (aiohttp)")
-# ================================================================================
+    print(f"🔥 Keep-alive server started successfully on port {port}")
+# =================================================================
 
 load_dotenv()
 DISCORD_TOKEN = os.getenv("TOKEN")
@@ -34,10 +34,8 @@ if not GROQ_API_KEY:
 
 groq_client = Groq(api_key=GROQ_API_KEY)
 
-# Conversation history (per channel)
 conversation_history = {}
 
-# Personality / System Prompt
 SYSTEM_PROMPT = (
     "You are AakiGPT, a helpful, witty, and friendly AI created by Akash. "
     "You love coding, tech, memes, and helping people. Be engaging, concise, "
@@ -46,16 +44,14 @@ SYSTEM_PROMPT = (
 
 class MyClient(discord.Client):
     async def on_ready(self):
-        print(f'✅ Logged in as {self.user}!')
-        print('🤖 AakiGPT is now running 24/7 on Render')
+        print(f'✅ Logged in as {self.user}')
+        print('🤖 AakiGPT is now online and running 24/7')
 
     async def on_message(self, message):
         if message.author == self.user:
             return
         if self.user.mentioned_in(message):
-            user_input = message.content.replace(f"<@{self.user.id}>", "")\
-                                       .replace(f"<@!{self.user.id}>", "")\
-                                       .strip()
+            user_input = message.content.replace(f"<@{self.user.id}>", "").replace(f"<@!{self.user.id}>", "").strip()
             if not user_input:
                 await message.channel.send("Yes? How can I help you? 😊")
                 return
@@ -80,36 +76,39 @@ class MyClient(discord.Client):
 
                     response_msg = await message.channel.send("▌")
                     full_response = ""
-                    last_edit = asyncio.get_event_loop().time()
+                    last_edit = asyncio.get_running_loop().time()
 
                     for chunk in stream:
                         if chunk.choices[0].delta.content is not None:
                             full_response += chunk.choices[0].delta.content
-                            if asyncio.get_event_loop().time() - last_edit > 1.0 or len(full_response) > 1800:
+                            if asyncio.get_running_loop().time() - last_edit > 1.0 or len(full_response) > 1800:
                                 await response_msg.edit(content=full_response + "▌")
-                                last_edit = asyncio.get_event_loop().time()
+                                last_edit = asyncio.get_running_loop().time()
 
                     await response_msg.edit(content=full_response)
                     await thinking_msg.delete()
 
-                # Save to history
                 conversation_history[channel_id].append({"role": "assistant", "content": full_response})
 
-                # Trim history
                 if len(conversation_history[channel_id]) > 22:
                     conversation_history[channel_id] = [conversation_history[channel_id][0]] + conversation_history[channel_id][-21:]
 
             except Exception as e:
-                print(f"Error: {e}")
+                print(f"Groq Error: {e}")
                 await message.channel.send("Sorry, I'm having some trouble right now 😓")
 
 intents = discord.Intents.default()
 intents.message_content = True
-bot = MyClient(intents=intents)
+client = MyClient(intents=intents)
 
 async def main():
-    await start_keep_alive()          # Start the web server first
-    await bot.start(DISCORD_TOKEN)    # Then start the bot (use start() instead of run() in async main)
+    try:
+        await start_keep_alive()   # Start web server first
+        print("Starting Discord bot...")
+        await client.start(DISCORD_TOKEN)   # This keeps running forever
+    except Exception as e:
+        print(f"Critical error in main: {e}")
+        raise
 
 if __name__ == "__main__":
     asyncio.run(main())
