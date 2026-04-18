@@ -2,31 +2,26 @@ import discord
 import os
 from dotenv import load_dotenv
 from groq import Groq
-import threading
-from http.server import HTTPServer, BaseHTTPRequestHandler
-import time
 import asyncio
+import aiohttp
+from aiohttp import web
 
-# ================== KEEP-ALIVE SERVER FOR RENDER ==================
-class KeepAliveHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.send_header("Content-type", "text/plain")
-        self.end_headers()
-        self.wfile.write("✅ AakiGPT Bot is Running 24/7".encode("utf-8"))
+# ================== KEEP-ALIVE FOR RENDER (aiohttp - Recommended) ==================
+async def ping_handler(request):
+    return web.Response(text="✅ AakiGPT Bot is Running 24/7 on Render", status=200)
 
-def run_keep_alive():
-    # Render injects PORT environment variable automatically
+async def start_keep_alive():
+    app = web.Application()
+    app.router.add_get('/', ping_handler)      # Root path
+    app.router.add_get('/ping', ping_handler)  # Extra path for safety
+
     port = int(os.getenv("PORT", 10000))
-    try:
-        server = HTTPServer(('0.0.0.0', port), KeepAliveHandler)
-        print(f"🔥 Keep-alive server started on port {port}")
-        server.serve_forever()
-    except Exception as e:
-        print(f"Keep-alive server error: {e}")
-
-threading.Thread(target=run_keep_alive, daemon=True).start()
-# ================================================================
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, '0.0.0.0', port)
+    await site.start()
+    print(f"🔥 Keep-alive server started on port {port} (aiohttp)")
+# ================================================================================
 
 load_dotenv()
 DISCORD_TOKEN = os.getenv("TOKEN")
@@ -57,29 +52,22 @@ class MyClient(discord.Client):
     async def on_message(self, message):
         if message.author == self.user:
             return
-
         if self.user.mentioned_in(message):
             user_input = message.content.replace(f"<@{self.user.id}>", "")\
                                        .replace(f"<@!{self.user.id}>", "")\
                                        .strip()
-
             if not user_input:
                 await message.channel.send("Yes? How can I help you? 😊")
                 return
 
             channel_id = str(message.channel.id)
-
-            # Initialize history with system prompt
             if channel_id not in conversation_history:
                 conversation_history[channel_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
 
-            # Add user message to history
             conversation_history[channel_id].append({"role": "user", "content": user_input})
 
             try:
                 thinking_msg = await message.channel.send("Thinking... 🤔")
-
-                # Typing indicator while generating
                 async with message.channel.typing():
                     stream = groq_client.chat.completions.create(
                         model="llama-3.3-70b-versatile",
@@ -92,28 +80,22 @@ class MyClient(discord.Client):
 
                     response_msg = await message.channel.send("▌")
                     full_response = ""
-                    last_edit = time.time()
+                    last_edit = asyncio.get_event_loop().time()
 
                     for chunk in stream:
                         if chunk.choices[0].delta.content is not None:
                             full_response += chunk.choices[0].delta.content
-
-                            # Update every ~1 second (much safer than every 40 chars)
-                            if time.time() - last_edit > 1.0 or len(full_response) > 1800:
+                            if asyncio.get_event_loop().time() - last_edit > 1.0 or len(full_response) > 1800:
                                 await response_msg.edit(content=full_response + "▌")
-                                last_edit = time.time()
+                                last_edit = asyncio.get_event_loop().time()
 
-                    # Final message
                     await response_msg.edit(content=full_response)
                     await thinking_msg.delete()
 
-                # Save assistant response to memory
-                conversation_history[channel_id].append({
-                    "role": "assistant",
-                    "content": full_response
-                })
+                # Save to history
+                conversation_history[channel_id].append({"role": "assistant", "content": full_response})
 
-                # Keep history reasonable (max ~10 exchanges)
+                # Trim history
                 if len(conversation_history[channel_id]) > 22:
                     conversation_history[channel_id] = [conversation_history[channel_id][0]] + conversation_history[channel_id][-21:]
 
@@ -123,6 +105,11 @@ class MyClient(discord.Client):
 
 intents = discord.Intents.default()
 intents.message_content = True
-
 bot = MyClient(intents=intents)
-bot.run(DISCORD_TOKEN)
+
+async def main():
+    await start_keep_alive()          # Start the web server first
+    await bot.start(DISCORD_TOKEN)    # Then start the bot (use start() instead of run() in async main)
+
+if __name__ == "__main__":
+    asyncio.run(main())
