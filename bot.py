@@ -4,22 +4,34 @@ from dotenv import load_dotenv
 from groq import Groq
 import asyncio
 from aiohttp import web
+import threading
 
-# ================== KEEP-ALIVE SERVER (aiohttp) ==================
-async def ping_handler(request):
-    return web.Response(text="✅ AakiGPT Bot is Running 24/7 on Render", status=200)
+# ================== KEEP-ALIVE SERVER (Threaded - More Stable on Render) ==================
+def run_keep_alive():
+    async def ping_handler(request):
+        return web.Response(text="✅ AakiGPT Bot is Running 24/7", status=200)
 
-async def start_keep_alive():
-    app = web.Application()
-    app.router.add_get('/', ping_handler)
-    app.router.add_get('/ping', ping_handler)
+    async def start_server():
+        app = web.Application()
+        app.router.add_get('/', ping_handler)
+        app.router.add_get('/ping', ping_handler)
 
-    port = int(os.getenv("PORT", 10000))
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, '0.0.0.0', port)
-    await site.start()
-    print(f"🔥 Keep-alive server started on port {port}")
+        port = int(os.getenv("PORT", 10000))
+        runner = web.AppRunner(app)
+        await runner.setup()
+        site = web.TCPSite(runner, '0.0.0.0', port)
+        await site.start()
+        print(f"🔥 Keep-alive server started on port {port}")
+
+    # Run the aiohttp server in a separate thread
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(start_server())
+    loop.run_forever()
+
+# Start keep-alive in background thread
+threading.Thread(target=run_keep_alive, daemon=True).start()
+print("Keep-alive thread started")
 # =================================================================
 
 load_dotenv()
@@ -100,16 +112,11 @@ intents = discord.Intents.default()
 intents.message_content = True
 client = MyClient(intents=intents)
 
-# ====================== MAIN FUNCTION ======================
-async def main():
-    await start_keep_alive()          # Start web server
-    print("Starting Discord bot...")
-    await client.start(DISCORD_TOKEN) # This runs forever
-
+# ====================== SIMPLE MAIN ======================
 if __name__ == "__main__":
+    print("Starting AakiGPT Bot...")
     try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("Bot stopped manually.")
+        client.run(DISCORD_TOKEN)   # Use the classic blocking run() - most stable on Render
     except Exception as e:
-        print(f"Critical error: {e}")
+        print(f"Bot crashed: {e}")
+    
